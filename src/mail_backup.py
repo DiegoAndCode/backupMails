@@ -12,6 +12,8 @@ class Backup:
             'email2@exemplo.com.br' : 'SenhaDoEmail123',
             'email_exemplo3@exemplo.com.br' : 'SenhaDoEmail123'
         }
+        
+        # Obtém o diretório atual onde o script está sendo executado
         self.current_directory = os.path.dirname(os.path.abspath(__file__))
 
     def save_folder_emails(self, imap_conn, folder_name, mbox):
@@ -63,45 +65,36 @@ class Backup:
         return count
 
     def save_all_folders_emails(self, imap_conn, mbox):
-        # Salvar e-mails de todas as pastas
-        for user, password in self.emails.items():
-            # Conectar ao servidor IMAP
-            mail = imaplib.IMAP4_SSL(self.imap_host, self.imap_port)
-            mail.login(user, password)
+        # Salvar e-mails da caixa de entrada (INBOX)
+        inbox_count = self.count_emails_in_folder(imap_conn, 'INBOX')
+        if inbox_count >= 0:
+            print(f"Processando pasta: Caixa de Entrada ({inbox_count} e-mails)...")
+            self.save_folder_emails(imap_conn, 'INBOX', mbox)
 
-            # Salvar e-mails da caixa de entrada (INBOX)
-            inbox_count = self.count_emails_in_folder(mail, 'INBOX')
-            if inbox_count >= 0:
-                print(f"Processando pasta: Caixa de Entrada ({inbox_count} e-mails)...")
-                self.save_folder_emails(mail, 'INBOX', mbox)
+        # Listar todas as pastas
+        status, folders = imap_conn.list()
+        if status != 'OK':
+            print("Erro ao listar pastas")
+            return
 
-            # Listar todas as pastas
-            status, folders = mail.list()
-            if status != 'OK':
-                print("Erro ao listar pastas")
-                return
+        # Decodificar e ordenar a lista de pastas em ordem alfabética
+        folders_decoded = [folder.decode() for folder in folders]
+        folders_sorted = sorted(folders_decoded)
 
-            # Decodificar e ordenar a lista de pastas em ordem alfabética
-            folders_decoded = [folder.decode() for folder in folders]
-            folders_sorted = sorted(folders_decoded)
+        # Iterar sobre as pastas ordenadas
+        for folder in folders_sorted[1:]:
+            # Extrair o nome da pasta
+            if ' "." ' in folder:
+                folder_name = folder.split(' "." ')[1]
+            else:
+                continue
 
-            # Iterar sobre as pastas ordenadas
-            for folder in folders_sorted[1:]:
-                # Extrair o nome da pasta
-                if ' "." ' in folder:
-                    folder_name = folder.split(' "." ')[1]
-                else:
-                    continue
-
-                # Contar a quantidade de e-mails na pasta
-                folder_count = self.count_emails_in_folder(mail, folder_name)
-                if folder_count >= 0:
-                    print(f"Processando pasta: {folder_name} ({folder_count} e-mails)...")
-                    # Salvar e-mails da pasta
-                    self.save_folder_emails(mail, folder_name, mbox)
-
-            # Fechar conexão
-            mail.logout()
+            # Contar a quantidade de e-mails na pasta
+            folder_count = self.count_emails_in_folder(imap_conn, folder_name)
+            if folder_count >= 0:
+                print(f"Processando pasta: {folder_name} ({folder_count} e-mails)...")
+                # Salvar e-mails da pasta
+                self.save_folder_emails(imap_conn, folder_name, mbox)
 
     def run_backup(self):
         for user, password in self.emails.items():
